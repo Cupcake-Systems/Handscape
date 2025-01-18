@@ -4,17 +4,24 @@ import 'package:handscape/canvas/page_strokes_painter.dart';
 import 'package:handscape/data_structures/notebook.dart';
 import 'package:handscape/tools.dart';
 
+import '../data_structures/drawing_tools.dart';
+
 class SingleNotebookPage extends StatefulWidget {
   final NotebookPage page;
-  final Pen selectedPen;
   final void Function() onStartDrawing, onStopDrawing;
+
+  final DrawingToolType selectedTool;
+  final Color? selectedColor;
+  final double? selectedStrokeWidth;
 
   const SingleNotebookPage({
     super.key,
     required this.page,
-    required this.selectedPen,
+    required this.selectedTool,
     required this.onStartDrawing,
     required this.onStopDrawing,
+    required this.selectedColor,
+    required this.selectedStrokeWidth,
   });
 
   @override
@@ -23,10 +30,25 @@ class SingleNotebookPage extends StatefulWidget {
 
 class _SingleNotebookPageState extends State<SingleNotebookPage> {
   bool isDrawing = false;
+  List<Offset> selectionPath = [];
 
   @override
   Widget build(BuildContext context) {
-    widget.page.content.strokes.putIfAbsent(widget.selectedPen, () => []);
+    BrushTool? brushTool;
+
+    if (widget.selectedTool == DrawingToolType.pen || widget.selectedTool == DrawingToolType.highlighter) {
+      switch (widget.selectedTool) {
+        case DrawingToolType.pen:
+          brushTool = Pen(color: widget.selectedColor!, strokeWidth: widget.selectedStrokeWidth!);
+          break;
+        case DrawingToolType.highlighter:
+          brushTool = Highlighter(color: widget.selectedColor!, strokeWidth: widget.selectedStrokeWidth!);
+          break;
+        default:
+          throw Exception("Invalid brush tool type");
+      }
+    }
+
     return Card(
       margin: EdgeInsets.zero,
       elevation: 5,
@@ -41,16 +63,30 @@ class _SingleNotebookPageState extends State<SingleNotebookPage> {
 
             widget.onStartDrawing();
 
-            final position = localPositionInPage(event.localPosition);
-            widget.page.content.strokes[widget.selectedPen]!.add([position]);
+            if (brushTool != null) {
+              final position = localPositionInPage(event.localPosition);
+              setState(() {
+                widget.page.content.strokes.add((brushTool!, [position]));
+              });
+            } else if (widget.selectedTool == DrawingToolType.selection) {
+              setState(() {
+                selectionPath.add(localPositionInPage(event.localPosition));
+              });
+            }
           },
           onPointerMove: (event) {
             if (event.buttons != 1) return;
 
-            final position = localPositionInPage(event.localPosition);
-            setState(() {
-              widget.page.content.strokes[widget.selectedPen]!.last.add(position);
-            });
+            if (brushTool != null) {
+              final position = localPositionInPage(event.localPosition);
+              setState(() {
+                widget.page.content.strokes.last.$2.add(position);
+              });
+            } else if (widget.selectedTool == DrawingToolType.selection) {
+              setState(() {
+                selectionPath.add(localPositionInPage(event.localPosition));
+              });
+            }
           },
           onPointerUp: (event) {
             if (!isDrawing) return;
@@ -59,13 +95,15 @@ class _SingleNotebookPageState extends State<SingleNotebookPage> {
 
             isDrawing = false;
 
-            final strokes = widget.page.content.strokes[widget.selectedPen]!;
-
-            widget.page.content.strokes[widget.selectedPen]![strokes.length - 1] = ramerDouglasPeucker(strokes.last, 0.00005);
+            final oldPoints = widget.page.content.strokes.last.$2;
+            final optimizedPoints = ramerDouglasPeucker(oldPoints, 0.00005);
+            widget.page.content.strokes.last.$2.clear();
+            widget.page.content.strokes.last.$2.addAll(optimizedPoints);
+            selectionPath.clear();
           },
           child: CustomPaint(
             painter: PageBackgroundPainter(page: widget.page),
-            foregroundPainter: PageStrokesPainter(page: widget.page),
+            foregroundPainter: PageStrokesPainter(page: widget.page, selectionPath: selectionPath),
           ),
         ),
       ),

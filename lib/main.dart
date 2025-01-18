@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:handscape/pages/folder_content.dart';
+import 'package:handscape/storage/app_storage.dart';
 
 import 'data_structures/folder.dart';
 import 'data_structures/notebook.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await AppStorage.init();
   runApp(const MyApp());
 }
 

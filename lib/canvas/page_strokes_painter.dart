@@ -1,32 +1,53 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:handscape/data_structures/notebook.dart';
 
 class PageStrokesPainter extends CustomPainter {
   final NotebookPage page;
+  final List<Offset>? selectionPath;
 
-  PageStrokesPainter({super.repaint, required this.page});
+  PageStrokesPainter({super.repaint, required this.page, this.selectionPath});
 
   @override
   void paint(Canvas canvas, Size size) {
     canvas.scale(size.width / page.width, size.height / page.height);
 
-    for (final pen in page.content.strokes.keys) {
-      final penPaint = Paint()
-        ..color = pen.color
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = pen.strokeWidth
-        ..strokeCap = StrokeCap.round;
+    for (final stroke in page.content.strokes) {
+      final strokePaint = stroke.$1.paint;
+      final strokePoints = stroke.$2;
 
-      for (final stroke in page.content.strokes[pen]!) {
-        if (stroke.isEmpty) continue;
+      if (strokePoints.isEmpty) continue;
 
-        if (stroke.length == 1) {
-          canvas.drawCircle(stroke.first, pen.strokeWidth / 2, Paint()..color = pen.color);
-          continue;
-        }
-
-        paintSmoothStrokeCatmull(stroke, penPaint, canvas);
+      if (strokePoints.length == 1) {
+        canvas.drawCircle(strokePoints.first, strokePaint.strokeWidth / 2, Paint()..color = strokePaint.color);
+        continue;
       }
+
+      paintSmoothStrokeCatmull(strokePoints, strokePaint, canvas);
+    }
+
+    if (selectionPath != null && selectionPath!.isNotEmpty) {
+      paintDashedPath(
+        path: Path()..addPolygon(selectionPath!, false),
+        canvas: canvas,
+        paint: Paint()
+          ..color = Colors.black.withOpacity(0.4)
+          ..strokeWidth = 0.4 / 1000
+          ..style = PaintingStyle.stroke
+          ..strokeJoin = StrokeJoin.round,
+      );
+      paintDashedPath(
+        path: Path()
+          ..moveTo(selectionPath!.first.dx, selectionPath!.first.dy)
+          ..lineTo(selectionPath!.last.dx, selectionPath!.last.dy),
+        canvas: canvas,
+        paint: Paint()
+          ..color = Colors.black.withOpacity(0.2)
+          ..strokeWidth = 0.3 / 1000
+          ..style = PaintingStyle.stroke
+          ..strokeJoin = StrokeJoin.round,
+      );
     }
   }
 
@@ -39,10 +60,6 @@ class PageStrokesPainter extends CustomPainter {
 
     for (int i = 1; i < stroke.length - 1; i++) {
       // Calculate the midpoints between consecutive points
-      final midPoint1 = Offset(
-        (stroke[i - 1].dx + stroke[i].dx) / 2,
-        (stroke[i - 1].dy + stroke[i].dy) / 2,
-      );
       final midPoint2 = Offset(
         (stroke[i].dx + stroke[i + 1].dx) / 2,
         (stroke[i].dy + stroke[i + 1].dy) / 2,
@@ -98,6 +115,29 @@ class PageStrokesPainter extends CustomPainter {
     }
 
     canvas.drawPath(path, penPaint);
+  }
+
+  void paintDashedPath({
+    required Path path,
+    required Canvas canvas,
+    double dashWidth = 3 / 1000,
+    double dashSpace = 3 / 1000,
+    double distance = 0.0 / 1000,
+    required Paint paint,
+  }) {
+    Path dashPath = Path();
+
+    for (PathMetric pathMetric in path.computeMetrics()) {
+      while (distance < pathMetric.length) {
+        dashPath.addPath(
+          pathMetric.extractPath(distance, distance + dashWidth),
+          Offset.zero,
+        );
+        distance += dashWidth;
+        distance += dashSpace;
+      }
+    }
+    canvas.drawPath(dashPath, paint);
   }
 
   @override

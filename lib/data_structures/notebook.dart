@@ -1,5 +1,6 @@
-import 'dart:math';
 import 'dart:ui';
+
+import 'drawing_tools.dart';
 
 class Notebook {
   String title;
@@ -62,23 +63,13 @@ class NotebookPage {
 }
 
 class NotebookPageContent {
-  final Map<Pen, List<List<Offset>>> strokes;
+  final List<(BrushTool brush, List<Offset> points)> strokes;
 
   const NotebookPageContent({
     required this.strokes,
   });
 
-  NotebookPageContent.empty() : strokes = {};
-}
-
-class Pen {
-  final double strokeWidth;
-  final Color color;
-
-  const Pen({
-    required this.strokeWidth,
-    required this.color,
-  });
+  NotebookPageContent.empty() : strokes = [];
 }
 
 class Lineature {
